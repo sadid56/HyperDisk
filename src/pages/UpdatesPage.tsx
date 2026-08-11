@@ -117,7 +117,7 @@ export const UpdatesPage: React.FC<UpdatesPageProps> = React.memo(({ onBack, upd
                     </div>
                   ) : (
                     <Button variant='primary' fullWidth onClick={updater.startUpdate} leftIcon={<RefreshCw className='w-3.5 h-3.5' />}>
-                      Update to v{updater.updateInfo.version} Now
+                      Update to {updater.updateInfo.version} Now
                     </Button>
                   )}
                 </div>

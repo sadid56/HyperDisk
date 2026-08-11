@@ -3,15 +3,51 @@ import { formatBytes } from "../../utils/formatters";
 import { SystemDrive } from "../../types";
 import { Card } from "../../components/ui/Card";
 
+import { Skeleton } from "../../components/ui/Skeleton";
+
 interface VolumeDetailsCardProps {
   systemDrive: SystemDrive;
+  isLoading?: boolean;
   onScanPath: (path: string) => void;
 }
 
 export const VolumeDetailsCard: React.FC<VolumeDetailsCardProps> = ({
   systemDrive,
+  isLoading,
   onScanPath,
 }) => {
+  if (isLoading) {
+    return (
+      <Card padding="lg" className="flex flex-col md:flex-row items-center gap-8 justify-between bg-slate-900/30 border border-slate-800/40 select-none">
+        {/* SVG Circular Ring Skeleton */}
+        <div className="w-32 h-32 flex items-center justify-center shrink-0">
+          <Skeleton width={110} height={110} rounded="full" />
+        </div>
+        
+        {/* Metadata Skeleton */}
+        <div className="flex-1 space-y-4 w-full">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="space-y-2">
+              <Skeleton width={180} height={16} rounded="sm" />
+              <Skeleton width={110} height={10} rounded="sm" />
+            </div>
+            <Skeleton width={120} height={18} rounded="full" />
+          </div>
+          
+          {/* Progress bar and text */}
+          <div className="space-y-2">
+            <Skeleton height={8} rounded="full" className="w-full" />
+            <div className="flex justify-between">
+              <Skeleton width={80} height={10} rounded="sm" />
+              <Skeleton width={140} height={10} rounded="sm" />
+            </div>
+          </div>
+          
+          <Skeleton width={110} height={28} rounded="md" />
+        </div>
+      </Card>
+    );
+  }
   const total = systemDrive.total_space || 512000000000;
   const available = systemDrive.available_space || 455820000000;
   const used = total > available ? total - available : 0;

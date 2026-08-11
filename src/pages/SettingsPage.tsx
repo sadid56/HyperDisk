@@ -344,7 +344,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
                   </div>
                 ) : (
                   <Button variant='primary' fullWidth onClick={updater.startUpdate} className='text-xs'>
-                    Update to v{updater.updateInfo.version} Now
+                    Update to {updater.updateInfo.version} Now
                   </Button>
                 )}
               </div>

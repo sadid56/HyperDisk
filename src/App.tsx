@@ -53,7 +53,14 @@ export const App: React.FC = () => {
 
   const rootPath = flatNodes[0]?.path;
   const { refreshDiskInfo } = useDiskInfo(rootPath);
-  const { drives, folders, systemRootFolders, loading: drivesLoading, refetch: refetchDrives } = useSystemDrives();
+  const {
+    drives,
+    folders,
+    systemRootFolders,
+    loading: drivesLoading,
+    foldersLoading,
+    refetch: refetchDrives,
+  } = useSystemDrives();
   const {
     largeFiles,
     cleanupSuggestions,
@@ -317,6 +324,7 @@ export const App: React.FC = () => {
           folders={folders}
           systemRootFolders={systemRootFolders}
           drivesLoading={drivesLoading}
+          foldersLoading={foldersLoading}
           largeFiles={largeFiles}
           cleanupSuggestions={cleanupSuggestions}
           duplicateGroups={duplicateGroups}
@@ -324,6 +332,7 @@ export const App: React.FC = () => {
           cleanupLoading={cleanupLoading}
           duplicatesLoading={duplicatesLoading}
           onRefreshTools={refetchTools}
+          onCreateFolder={handleCreateSubfolder}
         />
       </main>
 
@@ -383,6 +392,7 @@ export const App: React.FC = () => {
       <CreateFolderModal
         isOpen={Boolean(createFolderTarget)}
         parentFolder={createFolderTarget}
+        parentPath={createFolderTarget ? getFullPath(createFolderTarget.id, flatNodes) : ""}
         onClose={handleCloseCreateFolder}
         onFolderCreated={handleFolderCreated}
       />

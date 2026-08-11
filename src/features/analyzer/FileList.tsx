@@ -77,6 +77,7 @@ interface FileListProps {
   activeNode: FileNode | null;
   flatNodes: FileNode[];
   searchQuery: string;
+  isScanning?: boolean;
   hoveredNode: FileNode | null;
   selectedNode: FileNode | null;
   onHoverNode: (node: FileNode | null) => void;
@@ -88,7 +89,7 @@ interface FileListProps {
 const MAX_SEARCH_RESULTS = 100;
 
 export const FileList: React.FC<FileListProps> = React.memo(
-  ({ activeNode, flatNodes, searchQuery, hoveredNode, selectedNode, onHoverNode, onSelectNode, onNavigate, onContextMenu }) => {
+  ({ activeNode, flatNodes, searchQuery, isScanning, hoveredNode, selectedNode, onHoverNode, onSelectNode, onNavigate, onContextMenu }) => {
     const isSearching = searchQuery.trim().length > 0;
     const [limit, setLimit] = useState(100);
     const [prevActiveNodeId, setPrevActiveNodeId] = useState<number | null>(null);
@@ -132,7 +133,7 @@ export const FileList: React.FC<FileListProps> = React.memo(
       return displayChildren.slice(0, limit);
     }, [displayChildren, limit]);
 
-    if (!activeNode) {
+    if (!activeNode || (isScanning && displayChildren.length === 0)) {
       return (
         <div className='flex-1 flex flex-col min-h-0'>
           <div className='flex-1 overflow-hidden divide-y divide-surface-border/50'>

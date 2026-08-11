@@ -5,6 +5,8 @@ import { FileList } from "../features/analyzer/FileList";
 import { FocusCard } from "../components/common/FocusCard";
 import { FileNode } from "../types";
 
+import { Plus } from "lucide-react";
+
 interface AnalyzerPageProps {
   flatNodes: FileNode[];
   currentId: number | null;
@@ -21,6 +23,7 @@ interface AnalyzerPageProps {
   onNavigate: (id: number) => void;
   onContextMenu: (e: React.MouseEvent, node: FileNode) => void;
   onBackToOrigin: () => void;
+  onCreateFolder: (node: FileNode) => void;
 }
 
 export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
@@ -40,6 +43,7 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
     onNavigate,
     onContextMenu,
     onBackToOrigin,
+    onCreateFolder,
   }) => {
     return (
       <div className='flex-1 flex flex-col min-h-0 animate-in fade-in duration-150'>
@@ -66,13 +70,26 @@ export const AnalyzerPage: React.FC<AnalyzerPageProps> = React.memo(
 
           <div className='md:col-span-6 lg:col-span-5 flex flex-col bg-surface/30 min-h-[300px]'>
             <div className='px-4 py-2 bg-surface/60 border-b border-surface-border text-[11px] font-bold text-slate-400 uppercase tracking-wider flex justify-between'>
-              <span>Contents</span>
+              <div className='flex items-center gap-2'>
+                <span>Contents</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (activeNode) onCreateFolder(activeNode);
+                  }}
+                  className='text-slate-300 cursor-pointer transition-colors p-0.5 rounded hover:bg-surface-border/50'
+                  title='Create Folder'
+                >
+                  <Plus className='w-3 h-3' />
+                </button>
+              </div>
               <span>Size</span>
             </div>
             <FileList
               activeNode={activeNode}
               flatNodes={flatNodes}
               searchQuery={searchQuery}
+              isScanning={isScanning}
               hoveredNode={hoveredNode}
               selectedNode={selectedNode}
               onHoverNode={onHoverNode}

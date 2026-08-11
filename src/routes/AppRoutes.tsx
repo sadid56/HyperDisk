@@ -37,6 +37,7 @@ interface AppRoutesProps {
   folders: UserFolder[];
   systemRootFolders: UserFolder[];
   drivesLoading: boolean;
+  foldersLoading?: boolean;
   largeFiles: LargeFile[];
   cleanupSuggestions: CleanupSuggestion[];
   duplicateGroups: DuplicateGroup[];
@@ -45,6 +46,7 @@ interface AppRoutesProps {
   duplicatesLoading: boolean;
   onRefreshTools: () => void;
   onBackToOrigin: () => void;
+  onCreateFolder: (node: FileNode) => void;
 }
 
 export const AppRoutes: React.FC<AppRoutesProps> = ({
@@ -71,6 +73,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   folders,
   systemRootFolders,
   drivesLoading,
+  foldersLoading,
   largeFiles,
   cleanupSuggestions,
   duplicateGroups,
@@ -78,6 +81,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   cleanupLoading,
   duplicatesLoading,
   onRefreshTools,
+  onCreateFolder,
 }) => {
   const navigate = useNavigate();
 
@@ -86,16 +90,19 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
       <Route
         path='/'
         element={
-          <DashboardPage
-            drives={drives}
-            folders={folders}
-            systemRootFolders={systemRootFolders}
-            largeFiles={largeFiles}
-            cleanupSuggestions={cleanupSuggestions}
-            isLoading={drivesLoading || cleanupLoading}
-            onScanPath={onScanPath}
-            onNavigateTab={(tab) => navigate(`/${tab === "overview" ? "" : tab}`)}
-          />
+            <DashboardPage
+              drives={drives}
+              folders={folders}
+              systemRootFolders={systemRootFolders}
+              largeFiles={largeFiles}
+              cleanupSuggestions={cleanupSuggestions}
+              drivesLoading={drivesLoading}
+              foldersLoading={foldersLoading}
+              largeFilesLoading={largeFilesLoading}
+              cleanupLoading={cleanupLoading}
+              onScanPath={onScanPath}
+              onNavigateTab={(tab) => navigate(`/${tab === "overview" ? "" : tab}`)}
+            />
         }
       />
       <Route
@@ -118,6 +125,7 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
               onNavigate={onNavigate}
               onContextMenu={onContextMenu}
               onBackToOrigin={onBackToOrigin}
+              onCreateFolder={onCreateFolder}
             />
           ) : (
             <div className='flex-1 flex flex-col items-center justify-center p-8 text-center space-y-6 max-w-sm mx-auto my-auto animate-in fade-in duration-200'>

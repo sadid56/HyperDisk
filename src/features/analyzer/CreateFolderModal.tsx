@@ -8,6 +8,7 @@ import { Button } from "../../components/ui/Button";
 interface CreateFolderModalProps {
   isOpen: boolean;
   parentFolder: FileNode | null;
+  parentPath: string;
   onClose: () => void;
   onFolderCreated: (newPath: string, folderName: string) => void;
 }
@@ -15,6 +16,7 @@ interface CreateFolderModalProps {
 export const CreateFolderModal: React.FC<CreateFolderModalProps> = React.memo(({
   isOpen,
   parentFolder,
+  parentPath,
   onClose,
   onFolderCreated,
 }) => {
@@ -36,11 +38,11 @@ export const CreateFolderModal: React.FC<CreateFolderModalProps> = React.memo(({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!folderName.trim() || !parentFolder) return;
+    if (!folderName.trim() || !parentFolder || !parentPath) return;
 
     try {
       const createdPath = await createFolder(
-        parentFolder.path,
+        parentPath,
         folderName.trim()
       );
 
@@ -72,7 +74,7 @@ export const CreateFolderModal: React.FC<CreateFolderModalProps> = React.memo(({
             </div>
             <div>
               <h2 className='text-sm font-bold text-slate-100'>Create New Folder</h2>
-              <p className='text-xs text-slate-400 font-mono truncate max-w-50' title={parentFolder.path}>
+              <p className='text-xs text-slate-400 font-mono truncate max-w-50' title={parentPath}>
                 In {parentFolder.name}
               </p>
             </div>

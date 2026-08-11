@@ -22,6 +22,7 @@ pub fn run() {
             commands::fetch_system_drives,
             commands::fetch_user_folders,
             commands::fetch_system_root_folders,
+            commands::fetch_folder_size,
             commands::fetch_large_files,
             commands::fetch_cleanup_suggestions,
             commands::fetch_duplicate_files,

@@ -240,6 +240,7 @@ pub fn get_disk_space(target_path: &str) -> Option<DiskSpaceInfo> {
 
     let mut best_match: Option<(&sysinfo::Disk, usize)> = None;
 
+    
     for disk in disks.iter() {
         let mount = disk.mount_point();
         if target.starts_with(mount) {
@@ -372,14 +373,11 @@ pub fn list_directory_entries(target_path: &str) -> Result<Vec<DirectoryEntry>, 
 pub fn has_full_disk_access() -> bool {
     #[cfg(target_os = "macos")]
     {
-        if let Ok(home) = std::env::var("HOME") {
-            let path = std::path::Path::new(&home).join("Library/Mail");
-            match std::fs::read_dir(path) {
-                Ok(_) => true,
-                Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
-            }
-        } else {
-            false
+        // Check TCC.db instead of user data folders (like Mail) to prevent OS prompts.
+        let path = std::path::Path::new("/Library/Application Support/com.apple.TCC/TCC.db");
+        match std::fs::metadata(path) {
+            Ok(_) => true,
+            Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
         }
     }
     #[cfg(not(target_os = "macos"))]
@@ -449,22 +447,15 @@ pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
         }
     }
 
-    let has_fda = has_full_disk_access();
 
     let folders: Vec<UserFolder> = all_paths
         .into_par_iter()
         .map(|(name, path_buf)| {
-            let is_protected = name != "Applications";
-            let size = if !is_protected || has_fda {
-                Some(get_dir_size_parallel(&path_buf))
-            } else {
-                None
-            };
             UserFolder {
                 name,
                 path: path_buf.to_string_lossy().to_string(),
                 exists: true,
-                size,
+                size: None,
             }
         })
         .collect();
@@ -477,32 +468,44 @@ pub fn get_dir_size_parallel(path: &Path) -> u64 {
         return 0;
     }
 
-    if let Ok(entries) = fs::read_dir(path) {
-        entries
-            .into_iter()
-            .filter_map(Result::ok)
-            .par_bridge()
-            .map(|entry| {
-                if let Ok(ft) = entry.file_type() {
-                    if ft.is_symlink() {
-                        return 0;
-                    }
-                    let p = entry.path();
-                    if ft.is_dir() {
-                        get_dir_size_parallel(&p)
-                    } else if let Ok(meta) = entry.metadata() {
-                        meta.len()
-                    } else {
-                        0
-                    }
-                } else {
-                    0
-                }
-            })
-            .sum()
-    } else {
-        0
+    #[cfg(target_os = "macos")]
+    {
+        let path_str = path.to_string_lossy();
+        // Avoid traversing APFS volume mount points that cause duplicate sizes
+        if path_str == "/System/Volumes" || path_str == "/Volumes" || path_str == "/dev" {
+            return 0;
+        }
     }
+
+    let mut size: u64 = 0;
+    let mut dirs = Vec::new();
+
+    if let Ok(entries) = fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(ft) = entry.file_type() {
+                if ft.is_symlink() {
+                    continue;
+                }
+                if ft.is_dir() {
+                    dirs.push(entry.path());
+                } else if let Ok(meta) = entry.metadata() {
+                    #[cfg(unix)]
+                    {
+                        use std::os::unix::fs::MetadataExt;
+                        let physical = meta.blocks().saturating_mul(512);
+                        size += std::cmp::min(meta.len(), physical);
+                    }
+                    #[cfg(not(unix))]
+                    {
+                        size += meta.len();
+                    }
+                }
+            }
+        }
+    }
+
+    let sub_size: u64 = dirs.into_par_iter().map(|p| get_dir_size_parallel(&p)).sum();
+    size + sub_size
 }
 
 #[allow(unused_variables)]
@@ -612,13 +615,11 @@ pub fn get_system_root_folders() -> Vec<UserFolder> {
     folders
         .into_par_iter()
         .map(|(name, path_buf)| {
-            let size = get_dir_size_parallel(&path_buf);
-            let size_opt = if size > 0 { Some(size) } else { None };
             UserFolder {
                 name,
                 path: path_buf.to_string_lossy().to_string(),
                 exists: true,
-                size: size_opt,
+                size: None,
             }
         })
         .collect()

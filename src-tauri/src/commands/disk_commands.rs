@@ -37,28 +37,57 @@ pub fn fetch_system_drives() -> Vec<SystemDrive> {
 }
 
 #[tauri::command]
-pub fn fetch_user_folders(app: tauri::AppHandle) -> Vec<UserFolder> {
-    get_user_folders(&app)
+pub async fn fetch_user_folders(app: tauri::AppHandle) -> Result<Vec<UserFolder>, String> {
+    tokio::task::spawn_blocking(move || {
+        get_user_folders(&app)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn fetch_system_root_folders() -> Vec<UserFolder> {
-    get_system_root_folders()
+pub async fn fetch_system_root_folders() -> Result<Vec<UserFolder>, String> {
+    tokio::task::spawn_blocking(move || {
+        get_system_root_folders()
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn fetch_large_files(app: tauri::AppHandle) -> Vec<LargeFile> {
-    get_large_files(&app)
+pub async fn fetch_folder_size(path: String) -> Result<u64, String> {
+    tokio::task::spawn_blocking(move || {
+        crate::services::get_dir_size_parallel(std::path::Path::new(&path))
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn fetch_cleanup_suggestions(app: tauri::AppHandle) -> Vec<CleanupSuggestion> {
-    get_cleanup_suggestions(&app)
+pub async fn fetch_large_files(app: tauri::AppHandle) -> Result<Vec<LargeFile>, String> {
+    tokio::task::spawn_blocking(move || {
+        get_large_files(&app)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-pub fn fetch_duplicate_files(app: tauri::AppHandle) -> Vec<DuplicateGroup> {
-    get_duplicate_files(&app)
+pub async fn fetch_cleanup_suggestions(app: tauri::AppHandle) -> Result<Vec<CleanupSuggestion>, String> {
+    tokio::task::spawn_blocking(move || {
+        get_cleanup_suggestions(&app)
+    })
+    .await
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn fetch_duplicate_files(app: tauri::AppHandle) -> Result<Vec<DuplicateGroup>, String> {
+    tokio::task::spawn_blocking(move || {
+        get_duplicate_files(&app)
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]

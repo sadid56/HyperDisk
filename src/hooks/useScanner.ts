@@ -202,6 +202,25 @@ export function useScanner() {
   const navigateTo = useCallback(
     async (nodeId: number) => {
       const targetNode = flatNodes[nodeId];
+
+      setCurrentId(nodeId);
+      setBreadcrumbIds(() => {
+        // Build path hierarchy from target node up to root
+        const trail: number[] = [];
+        let curr: number | null = nodeId;
+        while (curr !== null && flatNodes[curr]) {
+          trail.unshift(curr);
+          curr = flatNodes[curr].parentId;
+        }
+
+        // If trail is valid, use it; otherwise fallback to prev path
+        return trail.length > 0 ? trail : [nodeId];
+      });
+      setHoveredNode(null);
+      if (flatNodes[nodeId]) {
+        setSelectedNode(flatNodes[nodeId]);
+      }
+
       if (
         targetNode &&
         targetNode.isDirectory &&
@@ -240,24 +259,6 @@ export function useScanner() {
         } finally {
           setIsScanning(false);
         }
-      }
-
-      setCurrentId(nodeId);
-      setBreadcrumbIds(() => {
-        // Build path hierarchy from target node up to root
-        const trail: number[] = [];
-        let curr: number | null = nodeId;
-        while (curr !== null && flatNodes[curr]) {
-          trail.unshift(curr);
-          curr = flatNodes[curr].parentId;
-        }
-
-        // If trail is valid, use it; otherwise fallback to prev path
-        return trail.length > 0 ? trail : [nodeId];
-      });
-      setHoveredNode(null);
-      if (flatNodes[nodeId]) {
-        setSelectedNode(flatNodes[nodeId]);
       }
     },
     [flatNodes],

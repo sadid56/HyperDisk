@@ -3,17 +3,45 @@ import { Sparkles, HardDrive } from "lucide-react";
 import { Card } from "../../components/ui/Card";
 import { Button } from "../../components/ui/Button";
 
+import { Skeleton } from "../../components/ui/Skeleton";
+
 interface CleanupInsightsCardProps {
   junkSizeStr: string;
   tempSizeStr: string;
+  isLoading?: boolean;
   onNavigateTab: (tab: string) => void;
 }
 
 export const CleanupInsightsCard: React.FC<CleanupInsightsCardProps> = ({
   junkSizeStr,
   tempSizeStr,
+  isLoading,
   onNavigateTab,
 }) => {
+  if (isLoading) {
+    return (
+      <Card variant="default" padding="md" className="space-y-4 relative overflow-hidden">
+        <div>
+          <Skeleton width={120} height={12} rounded="sm" />
+          <Skeleton width={150} height={8} rounded="sm" className="mt-2" />
+        </div>
+        <div className="space-y-3 pt-2">
+          <div className="flex justify-between items-center">
+            <Skeleton width={90} height={10} rounded="sm" />
+            <Skeleton width={60} height={10} rounded="sm" />
+          </div>
+          <div className="flex justify-between items-center">
+            <Skeleton width={110} height={10} rounded="sm" />
+            <Skeleton width={70} height={10} rounded="sm" />
+          </div>
+        </div>
+        <div className="pt-2">
+          <Skeleton height={32} rounded="md" className="w-full" />
+        </div>
+      </Card>
+    );
+  }
+
   return (
     <Card variant="default" padding="md" className="space-y-4 relative overflow-hidden">
       <div>
