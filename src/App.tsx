@@ -412,8 +412,12 @@ export const App: React.FC = () => {
         body={updater.updateInfo?.body}
         installing={updater.installing}
         progressPercent={updater.progressPercent}
+        readyToRestart={updater.readyToRestart}
+        error={updater.error}
         onConfirm={updater.startUpdate}
+        onRestart={updater.performRestart}
         onSkip={updater.skipUpdate}
+        onRetry={() => updater.startUpdate()}
       />
 
       {showFdaModal && (

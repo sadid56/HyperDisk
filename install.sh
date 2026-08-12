@@ -163,7 +163,7 @@ install_linux() {
             exit 1
         fi
 
-        echo "Extracting binary from .deb package..."
+        echo "Extracting from .deb package..."
         DATA_FILE=$(ar t "$TEMP_FILE" | grep '^data.tar')
         if [ -z "$DATA_FILE" ]; then
             echo "Error: Could not locate data archive in .deb package."
@@ -188,10 +188,68 @@ install_linux() {
             exit 1
         fi
 
+        # Install binary
         mv "$TEMP_DIR/extracted/usr/bin/hyperdisk" "$BIN_DIR/$APP_NAME"
         chmod +x "$BIN_DIR/$APP_NAME"
-        rm -rf "$TEMP_DIR"
         echo "Installed native binary to $BIN_DIR/$APP_NAME"
+
+        # Install .desktop entry from the package (if bundled)
+        DEB_DESKTOP=$(find "$TEMP_DIR/extracted" -path "*/share/applications/*.desktop" | head -n 1)
+        if [ -n "$DEB_DESKTOP" ]; then
+            # Patch Exec and Icon paths to match our install locations
+            sed -e "s|^Exec=.*|Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 ${BIN_DIR}/${APP_NAME}|" \
+                -e "s|^Icon=.*|Icon=${APP_NAME}|" \
+                "$DEB_DESKTOP" > "$DESKTOP_DIR/$APP_NAME.desktop"
+            chmod +x "$DESKTOP_DIR/$APP_NAME.desktop"
+            echo "Installed desktop entry from package to $DESKTOP_DIR/$APP_NAME.desktop"
+        else
+            # Fallback: create desktop entry manually
+            echo "Creating desktop shortcut entry..."
+            cat > "$DESKTOP_DIR/$APP_NAME.desktop" <<DEOF
+[Desktop Entry]
+Name=${DISPLAY_NAME}
+Comment=Disk Storage Analyzer
+Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 ${BIN_DIR}/${APP_NAME}
+Icon=${APP_NAME}
+Terminal=false
+Type=Application
+Categories=Utility;System;
+DEOF
+            chmod +x "$DESKTOP_DIR/$APP_NAME.desktop"
+        fi
+
+        # Install icons from the package (if bundled)
+        DEB_ICONS_FOUND=false
+        while IFS= read -r icon_file; do
+            [ -z "$icon_file" ] && continue
+            # Reconstruct the destination path under ~/.local/share/icons/
+            REL_PATH=$(echo "$icon_file" | sed "s|$TEMP_DIR/extracted/usr/share/||")
+            DEST_PATH="$HOME/.local/share/$REL_PATH"
+            mkdir -p "$(dirname "$DEST_PATH")"
+            cp "$icon_file" "$DEST_PATH"
+            DEB_ICONS_FOUND=true
+        done <<< "$(find "$TEMP_DIR/extracted" -path "*/share/icons/*" -type f 2>/dev/null)"
+
+        if [ "$DEB_ICONS_FOUND" = true ]; then
+            echo "Installed icons from package"
+            # Update icon caches
+            if command -v gtk-update-icon-cache >/dev/null 2>&1; then
+                for theme_dir in "$HOME/.local/share/icons/"*/; do
+                    gtk-update-icon-cache -f -t "$theme_dir" >/dev/null 2>&1 || true
+                done
+            fi
+        else
+            # Fallback: download icon from GitHub
+            echo "Downloading icon..."
+            curl -s -L -o "$ICON_DIR/$APP_NAME.svg" "$ICON_URL"
+            if [ $? -eq 0 ]; then
+                echo "Installed icon to $ICON_DIR/$APP_NAME.svg"
+            else
+                echo "Warning: Failed to download icon."
+            fi
+        fi
+
+        rm -rf "$TEMP_DIR"
 
     elif [ "$IS_TAR_GZ" = true ]; then
         echo "Downloading ${ASSET_NAME}..."
@@ -226,6 +284,28 @@ install_linux() {
         rm -rf "$TEMP_DIR"
         echo "Installed binary to $BIN_DIR/$APP_NAME"
 
+        # For .tar.gz and .AppImage, create desktop entry and icon manually
+        echo "Downloading icon..."
+        curl -s -L -o "$ICON_DIR/$APP_NAME.svg" "$ICON_URL"
+        if [ $? -eq 0 ]; then
+            echo "Installed icon to $ICON_DIR/$APP_NAME.svg"
+        else
+            echo "Warning: Failed to download icon."
+        fi
+
+        echo "Creating desktop shortcut entry..."
+        cat > "$DESKTOP_DIR/$APP_NAME.desktop" <<EOF
+[Desktop Entry]
+Name=${DISPLAY_NAME}
+Comment=Disk Storage Analyzer
+Exec=env WEBKIT_DISABLE_DMABUF_RENDERER=1 ${BIN_DIR}/${APP_NAME}
+Icon=${ICON_DIR}/${APP_NAME}.svg
+Terminal=false
+Type=Application
+Categories=Utility;System;
+EOF
+        chmod +x "$DESKTOP_DIR/$APP_NAME.desktop"
+
     else
         echo "Downloading ${ASSET_NAME} (AppImage fallback)..."
         TEMP_FILE=$(mktemp)
@@ -240,20 +320,18 @@ install_linux() {
         mv "$TEMP_FILE" "$BIN_DIR/$APP_NAME"
         chmod +x "$BIN_DIR/$APP_NAME"
         echo "Installed binary to $BIN_DIR/$APP_NAME"
-    fi
 
-    # Install Application Icon
-    echo "Downloading icon..."
-    curl -s -L -o "$ICON_DIR/$APP_NAME.svg" "$ICON_URL"
-    if [ $? -eq 0 ]; then
-        echo "Installed icon to $ICON_DIR/$APP_NAME.svg"
-    else
-        echo "Warning: Failed to download icon, using fallback."
-    fi
+        # For AppImage, create desktop entry and icon manually
+        echo "Downloading icon..."
+        curl -s -L -o "$ICON_DIR/$APP_NAME.svg" "$ICON_URL"
+        if [ $? -eq 0 ]; then
+            echo "Installed icon to $ICON_DIR/$APP_NAME.svg"
+        else
+            echo "Warning: Failed to download icon."
+        fi
 
-    # Create Desktop Launcher Entry
-    echo "Creating desktop shortcut entry..."
-    cat > "$DESKTOP_DIR/$APP_NAME.desktop" <<EOF
+        echo "Creating desktop shortcut entry..."
+        cat > "$DESKTOP_DIR/$APP_NAME.desktop" <<EOF
 [Desktop Entry]
 Name=${DISPLAY_NAME}
 Comment=Disk Storage Analyzer
@@ -263,8 +341,8 @@ Terminal=false
 Type=Application
 Categories=Utility;System;
 EOF
-
-    chmod +x "$DESKTOP_DIR/$APP_NAME.desktop"
+        chmod +x "$DESKTOP_DIR/$APP_NAME.desktop"
+    fi
 
     # Update desktop file list databases
     if command -v update-desktop-database >/dev/null 2>&1; then

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getVersion } from '@tauri-apps/api/app';
-import { Settings, Type, Palette, Check, Sun, Moon, Laptop, ShieldAlert } from "lucide-react";
+import { Settings, Type, Palette, Check, Sun, Moon, Laptop, ShieldAlert, RotateCcw } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { PageHeader } from "../components/common/PageHeader";
@@ -19,8 +19,11 @@ interface SettingsPageProps {
     updateInfo: { version: string; date?: string; body?: string } | null;
     installing: boolean;
     progressPercent: number;
+    readyToRestart: boolean;
+    error: string | null;
     checkForUpdates: (isManual: boolean) => Promise<boolean>;
     startUpdate: () => Promise<void>;
+    performRestart: () => Promise<void>;
   };
 }
 export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }) => {
@@ -310,26 +313,63 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
             </div>
 
             {updater.updateAvailable && updater.updateInfo && (
-              <div className='p-4 bg-accent-purple/10 border border-accent-purple/30 rounded-xl space-y-3 mt-4 animate-in slide-in-from-top-4 duration-250'>
+              <div
+                className={`p-4 rounded-xl space-y-3 mt-4 animate-in slide-in-from-top-4 duration-250 ${
+                  updater.readyToRestart
+                    ? "bg-emerald-500/10 border border-emerald-500/30"
+                    : updater.error
+                      ? "bg-rose-500/10 border border-rose-500/30"
+                      : "bg-accent-purple/10 border border-accent-purple/30"
+                }`}
+              >
                 <div className='flex items-start justify-between'>
                   <div>
-                    <h4 className='font-bold text-xs text-text-primary'>New Release Available (v{updater.updateInfo.version})</h4>
+                    <h4 className='font-bold text-xs text-text-primary'>
+                      {updater.readyToRestart
+                        ? `Update v${updater.updateInfo.version} Ready`
+                        : updater.error
+                          ? "Update Failed"
+                          : `New Release Available (v${updater.updateInfo.version})`}
+                    </h4>
                     <p className='text-[9px] text-text-muted mt-0.5'>
-                      Released on: {updater.updateInfo.date ? new Date(updater.updateInfo.date).toLocaleDateString() : "N/A"}
+                      {updater.readyToRestart
+                        ? "Restart HyperDisk to apply the update"
+                        : updater.error
+                          ? updater.error
+                          : `Released on: ${updater.updateInfo.date ? new Date(updater.updateInfo.date).toLocaleDateString() : "N/A"}`}
                     </p>
                   </div>
-                  <span className='px-1.5 py-0.2 rounded-full text-[8px] font-bold bg-accent-purple text-white uppercase tracking-wider'>
-                    New
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[8px] font-bold text-white uppercase tracking-wider ${
+                      updater.readyToRestart ? "bg-emerald-600" : updater.error ? "bg-rose-600" : "bg-accent-purple"
+                    }`}
+                  >
+                    {updater.readyToRestart ? "Ready" : updater.error ? "Error" : "New"}
                   </span>
                 </div>
 
-                {updater.updateInfo.body && (
+                {!updater.readyToRestart && !updater.error && updater.updateInfo.body && (
                   <div className='text-[10px] text-text-muted bg-background/50 border border-surface-border p-2.5 rounded-lg max-h-24 overflow-y-auto leading-relaxed whitespace-pre-wrap select-text scrollbar-thin scrollbar-thumb-surface-border font-mono'>
                     {updater.updateInfo.body}
                   </div>
                 )}
 
-                {updater.installing ? (
+                {updater.readyToRestart ? (
+                  <Button
+                    variant='primary'
+                    fullWidth
+                    onClick={updater.performRestart}
+                    className='text-xs bg-emerald-600 hover:bg-emerald-700 border-emerald-500/50'
+                  >
+                    <RotateCcw className='w-3 h-3 mr-1.5' />
+                    Restart Now
+                  </Button>
+                ) : updater.error ? (
+                  <Button variant='primary' fullWidth onClick={updater.startUpdate} className='text-xs'>
+                    <RotateCcw className='w-3 h-3 mr-1.5' />
+                    Try Again
+                  </Button>
+                ) : updater.installing ? (
                   <div className='space-y-1.5 pt-1'>
                     <div className='flex items-center justify-between text-[10px] font-bold'>
                       <span className='text-accent-purple animate-pulse'>Installing Update...</span>

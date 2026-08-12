@@ -388,7 +388,7 @@ pub fn has_full_disk_access() -> bool {
 
 pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
     let mut standard_paths = Vec::new();
-    
+
     // Applications folder
     #[cfg(target_os = "windows")]
     {
@@ -399,13 +399,54 @@ pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
         standard_paths.push(("Applications".to_string(), PathBuf::from("/Applications")));
     }
 
-    // Standard profile folders
-    if let Ok(p) = app.path().document_dir() { standard_paths.push(("Documents".to_string(), p)); }
-    if let Ok(p) = app.path().download_dir() { standard_paths.push(("Downloads".to_string(), p)); }
-    if let Ok(p) = app.path().desktop_dir() { standard_paths.push(("Desktop".to_string(), p)); }
-    if let Ok(p) = app.path().picture_dir() { standard_paths.push(("Pictures".to_string(), p)); }
-    if let Ok(p) = app.path().video_dir() { standard_paths.push(("Movies".to_string(), p)); }
-    if let Ok(p) = app.path().audio_dir() { standard_paths.push(("Music".to_string(), p)); }
+    // On macOS without Full Disk Access, avoid using Tauri's app.path() API for
+    // standard user folders. Those calls go through NSFileManager which triggers
+    // individual TCC (Transparency, Consent, and Control) permission popups for
+    // each protected folder (Documents, Downloads, Desktop, etc.).
+    // Instead, construct paths manually from $HOME to avoid the prompt barrage.
+    #[cfg(target_os = "macos")]
+    {
+        let has_fda = has_full_disk_access();
+        if has_fda {
+            // With FDA granted, Tauri's path API is safe — no popups will appear
+            if let Ok(p) = app.path().document_dir() { standard_paths.push(("Documents".to_string(), p)); }
+            if let Ok(p) = app.path().download_dir() { standard_paths.push(("Downloads".to_string(), p)); }
+            if let Ok(p) = app.path().desktop_dir() { standard_paths.push(("Desktop".to_string(), p)); }
+            if let Ok(p) = app.path().picture_dir() { standard_paths.push(("Pictures".to_string(), p)); }
+            if let Ok(p) = app.path().video_dir()   { standard_paths.push(("Movies".to_string(), p)); }
+            if let Ok(p) = app.path().audio_dir()   { standard_paths.push(("Music".to_string(), p)); }
+        } else {
+            // Without FDA, construct paths from $HOME to avoid TCC prompts
+            if let Ok(home) = std::env::var("HOME") {
+                let home = PathBuf::from(home);
+                for (label, dir_name) in &[
+                    ("Documents", "Documents"),
+                    ("Downloads", "Downloads"),
+                    ("Desktop", "Desktop"),
+                    ("Pictures", "Pictures"),
+                    ("Movies", "Movies"),
+                    ("Music", "Music"),
+                ] {
+                    let p = home.join(dir_name);
+                    if p.exists() && p.is_dir() {
+                        standard_paths.push((label.to_string(), p));
+                    }
+                }
+            }
+        }
+    }
+
+    // On non-macOS platforms, always use Tauri's path API (no TCC restrictions)
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = &app; // suppress unused warning handled by cfg
+        if let Ok(p) = app.path().document_dir() { standard_paths.push(("Documents".to_string(), p)); }
+        if let Ok(p) = app.path().download_dir() { standard_paths.push(("Downloads".to_string(), p)); }
+        if let Ok(p) = app.path().desktop_dir() { standard_paths.push(("Desktop".to_string(), p)); }
+        if let Ok(p) = app.path().picture_dir() { standard_paths.push(("Pictures".to_string(), p)); }
+        if let Ok(p) = app.path().video_dir()   { standard_paths.push(("Movies".to_string(), p)); }
+        if let Ok(p) = app.path().audio_dir()   { standard_paths.push(("Music".to_string(), p)); }
+    }
 
     let mut all_paths = Vec::new();
     // Add standard ones that exist
@@ -446,7 +487,6 @@ pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
             }
         }
     }
-
 
     let folders: Vec<UserFolder> = all_paths
         .into_par_iter()

@@ -20,11 +20,12 @@ const isNewerVersion = (current: string, latest: string): boolean => {
 export function useAutoUpdater() {
   const [checking, setChecking] = useState(false);
   const [updateAvailable, setUpdateAvailable] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState<{ version: string; date?: string; body?: string; manualUrl?: string } | null>(null);
+  const [updateInfo, setUpdateInfo] = useState<{ version: string; date?: string; body?: string } | null>(null);
   const [installing, setInstalling] = useState(false);
   const [progressPercent, setProgressPercent] = useState(0);
   const [showModal, setShowModal] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [readyToRestart, setReadyToRestart] = useState(false);
 
   // Keep a reference to the Tauri Update object
   const updateRef = useRef<Update | null>(null);
@@ -32,6 +33,7 @@ export function useAutoUpdater() {
   const checkForUpdates = useCallback(async (isManual = false) => {
     setChecking(true);
     setError(null);
+    setReadyToRestart(false);
     try {
       // 1. Try checking latest version on GitHub API
       let gitHubLatestVersion: string | null = null;
@@ -68,16 +70,16 @@ export function useAutoUpdater() {
             return true;
           }
         } catch (e) {
-          console.warn("Direct release json fetch failed, falling back to manual notification:", e);
+          console.warn("Direct release json fetch failed:", e);
         }
 
-        // Fallback: Notify user of the new version with manual update link
+        // Fallback: show update available but note that auto-install is not possible
+        // (signed latest.json missing from the release)
         updateRef.current = null;
         setUpdateInfo({
           version: gitHubLatestVersion,
           date: gitHubReleaseData?.published_at,
-          body: gitHubReleaseData?.body || "A new release is available on GitHub.",
-          manualUrl: `https://github.com/sadid56/HyperDisk/releases/tag/${gitHubLatestVersion}`,
+          body: gitHubReleaseData?.body || "A new release is available.",
         });
         setUpdateAvailable(true);
         const skippedVersion = localStorage.getItem("hyperdisk_skipped_version");
@@ -140,6 +142,7 @@ export function useAutoUpdater() {
       setInstalling(true);
       setProgressPercent(0);
       setError(null);
+      setReadyToRestart(false);
 
       let downloaded = 0;
       const total = 100;
@@ -149,12 +152,6 @@ export function useAutoUpdater() {
 
         if (downloaded >= total) {
           clearInterval(interval);
-          showToast({
-            message: "Update Installed (Simulated)!",
-            description: "Relaunching HyperDisk to apply updates...",
-            type: "success",
-            duration: 4000,
-          });
 
           // Record this simulation in history log
           const historyJson = localStorage.getItem("hyperdisk_update_history") || "[]";
@@ -169,49 +166,26 @@ export function useAutoUpdater() {
             // Ignore history recording failures
           }
 
-          setTimeout(() => {
-            setInstalling(false);
-            setProgressPercent(0);
-            setShowModal(false);
-            showToast({
-              message: "Relaunch Skipped",
-              description: "Relaunch is skipped in development mode to preserve the dev server connection.",
-              type: "info",
-            });
-          }, 1500);
+          // Show "Ready to Restart" state instead of auto-relaunching
+          setInstalling(false);
+          setReadyToRestart(true);
         }
       }, 100);
       return;
     }
 
-    if (updateInfo?.manualUrl) {
-      try {
-        const { openUrl } = await import("@tauri-apps/plugin-opener");
-        await openUrl(updateInfo.manualUrl);
-        setShowModal(false);
-        showToast({
-          message: "Opening Release Page",
-          description: "Opened the latest release download page in your browser.",
-          type: "success",
-        });
-      } catch (err) {
-        console.error("Failed to open update URL:", err);
-      }
-      return;
-    }
-
+    // If no Tauri update object available, the signed release package is missing
     if (!updateRef.current) {
-      showToast({
-        message: "No Update Found",
-        description: "Please check for updates first.",
-        type: "error",
-      });
+      setError(
+        "This update cannot be installed automatically. The signed release package is not available yet. Please try again later or download manually from GitHub."
+      );
       return;
     }
 
     setInstalling(true);
     setProgressPercent(0);
     setError(null);
+    setReadyToRestart(false);
 
     try {
       let downloaded = 0;
@@ -231,12 +205,6 @@ export function useAutoUpdater() {
             break;
           case "Finished":
             setProgressPercent(100);
-            showToast({
-              message: "Update Installed!",
-              description: "Relaunching HyperDisk to apply updates...",
-              type: "success",
-              duration: 4000,
-            });
 
             // Record this installation in history log
             const historyJson = localStorage.getItem("hyperdisk_update_history") || "[]";
@@ -251,9 +219,9 @@ export function useAutoUpdater() {
               // Ignore history recording failures
             }
 
-            setTimeout(async () => {
-              await relaunch();
-            }, 1500);
+            // Show "Ready to Restart" state — let the user decide when to restart
+            setInstalling(false);
+            setReadyToRestart(true);
             break;
         }
       });
@@ -261,6 +229,7 @@ export function useAutoUpdater() {
       console.error("Download/install failed:", err);
       setError(err?.toString() || "Failed to download and install update");
       setInstalling(false);
+      setReadyToRestart(false);
       showToast({
         message: "Installation Failed",
         description: err?.toString() || "Failed to apply update.",
@@ -268,6 +237,35 @@ export function useAutoUpdater() {
       });
     }
   }, [updateInfo]);
+
+  const performRestart = useCallback(async () => {
+    showToast({
+      message: "Restarting HyperDisk",
+      description: "Applying update and relaunching...",
+      type: "success",
+      duration: 2000,
+    });
+
+    // In dev mode, skip actual relaunch to preserve dev server connection
+    if (import.meta.env.DEV) {
+      setTimeout(() => {
+        setReadyToRestart(false);
+        setShowModal(false);
+        setUpdateAvailable(false);
+        setUpdateInfo(null);
+        showToast({
+          message: "Relaunch Skipped",
+          description: "Relaunch is skipped in development mode to preserve the dev server connection.",
+          type: "info",
+        });
+      }, 1000);
+      return;
+    }
+
+    setTimeout(async () => {
+      await relaunch();
+    }, 1000);
+  }, []);
 
   const skipUpdate = useCallback(() => {
     if (updateInfo) {
@@ -290,8 +288,10 @@ export function useAutoUpdater() {
     showModal,
     setShowModal,
     error,
+    readyToRestart,
     checkForUpdates,
     startUpdate,
+    performRestart,
     skipUpdate,
   };
 }
