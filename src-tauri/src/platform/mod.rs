@@ -44,3 +44,7 @@ pub fn is_dir_size_parallel_excluded(path_str: &str) -> bool {
 pub fn is_tcc_protected_folder(path: &str) -> bool {
     os::is_tcc_protected_folder(path)
 }
+
+pub fn should_skip_size_check(path: &str) -> bool {
+    os::should_skip_size_check(path)
+}

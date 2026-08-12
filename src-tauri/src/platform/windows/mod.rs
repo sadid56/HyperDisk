@@ -42,6 +42,10 @@ pub fn get_disk_smart_status(_mount_point: &str) -> String {
     "Unknown".to_string()
 }
 
+pub fn should_skip_size_check(_path: &str) -> bool {
+    false
+}
+
 pub fn is_dir_size_parallel_excluded(_path_str: &str) -> bool {
     false
 }

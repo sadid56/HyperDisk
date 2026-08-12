@@ -59,6 +59,33 @@ pub fn is_dir_size_parallel_excluded(path_str: &str) -> bool {
     path_str == "/System/Volumes" || path_str == "/Volumes" || path_str == "/dev"
 }
 
+pub fn should_skip_size_check(path: &str) -> bool {
+    let path_buf = PathBuf::from(path);
+    if let Ok(home) = std::env::var("HOME") {
+        let home_path = PathBuf::from(home);
+        
+        let media_or_library = ["Pictures", "Movies", "Music", "Library"];
+        if media_or_library.iter().any(|subdir| {
+            let p = home_path.join(subdir);
+            path_buf.starts_with(&p) || path_buf == p
+        }) {
+            return true;
+        }
+
+        // Standard user folders require FDA. Skip if FDA is not granted.
+        if !has_full_disk_access() {
+            let tcc_dirs = ["Desktop", "Documents", "Downloads"];
+            if tcc_dirs.iter().any(|subdir| {
+                let p = home_path.join(subdir);
+                path_buf.starts_with(&p) || path_buf == p
+            }) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
 pub fn is_tcc_protected_folder(path: &str) -> bool {
     let path_buf = PathBuf::from(path);
     if let Ok(home) = std::env::var("HOME") {

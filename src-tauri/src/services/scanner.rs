@@ -200,8 +200,6 @@ impl Scanner {
             }
         }
 
-        let has_fda = crate::services::disk::has_full_disk_access();
-
         // Process child subdirectories in parallel using Rayon
         let dirs: Vec<(String, PathBuf, u64, bool)> = dir_entries
             .into_par_iter()
@@ -210,10 +208,8 @@ impl Scanner {
                 let name = entry.file_name().to_string_lossy().into_owned();
                 let size = if is_sym {
                     0
-                } else if has_fda {
-                    crate::services::get_dir_size_parallel(&entry_path)
                 } else {
-                    0
+                    crate::services::get_dir_size_parallel(&entry_path)
                 };
                 (name, entry_path, size, is_sym)
             })

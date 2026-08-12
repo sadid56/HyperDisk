@@ -56,7 +56,7 @@ pub async fn fetch_system_root_folders() -> Result<Vec<UserFolder>, String> {
 
 #[tauri::command]
 pub async fn fetch_folder_size(path: String) -> Result<u64, String> {
-    if crate::platform::is_tcc_protected_folder(&path) && !crate::services::disk::has_full_disk_access() {
+    if crate::platform::should_skip_size_check(&path) {
         return Ok(0);
     }
 

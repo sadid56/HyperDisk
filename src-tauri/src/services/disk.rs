@@ -401,8 +401,8 @@ pub fn assemble_user_folders(standard_paths: Vec<(String, PathBuf)>) -> Vec<User
                 let path = entry.path();
                 if path.is_dir() {
                     if let Some(name_str) = path.file_name().and_then(|n| n.to_str()) {
-                        // Skip hidden directories (starting with '.')
-                        if name_str.starts_with('.') {
+                        // Skip hidden directories (starting with '.') and Library system folder
+                        if name_str.starts_with('.') || name_str.eq_ignore_ascii_case("Library") {
                             continue;
                         }
                         // Skip if it's already in the standard paths
