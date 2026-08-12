@@ -177,3 +177,43 @@ pub fn get_system_root_folders() -> Vec<UserFolder> {
 
     crate::services::disk::collect_user_folders(folders)
 }
+
+pub fn toggle_autostart(app_name: &str, enabled: bool) -> Result<(), String> {
+    if let Some(home) = dirs::home_dir() {
+        let plist_dir = home.join("Library/LaunchAgents");
+        let plist_path = plist_dir.join(format!("com.{}.app.plist", app_name.to_lowercase()));
+
+        if enabled {
+            if !plist_dir.exists() {
+                std::fs::create_dir_all(&plist_dir).map_err(|e| e.to_string())?;
+            }
+            let exe_path = std::env::current_exe()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .into_owned();
+
+            let plist_content = format!(
+                r#"<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.{}.app</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>{}</string>
+    </array>
+    <key>RunAtLoad</key>
+    <true/>
+</dict>
+</plist>"#,
+                app_name.to_lowercase(),
+                exe_path
+            );
+            std::fs::write(&plist_path, plist_content).map_err(|e| e.to_string())?;
+        } else if plist_path.exists() {
+            std::fs::remove_file(plist_path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}

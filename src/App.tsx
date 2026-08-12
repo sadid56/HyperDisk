@@ -18,6 +18,7 @@ import { getFullPath } from "./utils/pathUtils";
 import { useToolsData } from "./hooks/useToolsData";
 import { useProtectedPath } from "./hooks/useProtectedPath";
 import { useFullDiskAccess } from "./hooks/useFullDiskAccess";
+import { useScanHistory } from "./hooks/useScanHistory";
 import { LeftSidebar } from "./layout/LeftSidebar";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { Header } from "./layout/Header";
@@ -54,24 +55,11 @@ export const App: React.FC = () => {
 
   const rootPath = flatNodes[0]?.path;
   const { refreshDiskInfo } = useDiskInfo(rootPath);
-  const {
-    drives,
-    folders,
-    systemRootFolders,
-    loading: drivesLoading,
-    foldersLoading,
-    refetch: refetchDrives,
-  } = useSystemDrives();
-  const {
-    largeFiles,
-    cleanupSuggestions,
-    duplicateGroups,
-    largeFilesLoading,
-    cleanupLoading,
-    duplicatesLoading,
-    refetchTools,
-  } = useToolsData();
+  const { drives, folders, systemRootFolders, loading: drivesLoading, foldersLoading, refetch: refetchDrives } = useSystemDrives();
+  const { largeFiles, cleanupSuggestions, duplicateGroups, largeFilesLoading, cleanupLoading, duplicatesLoading, refetchTools } =
+    useToolsData();
   const { checkFDA, requestFDA, hasFDA } = useFullDiskAccess();
+  const { addScanPath } = useScanHistory();
   const [fdaSetupSkipped, setFdaSetupSkipped] = useState<boolean>(() => {
     return localStorage.getItem("hyperdisk_fda_dismissed") === "true";
   });
@@ -94,29 +82,56 @@ export const App: React.FC = () => {
   const [isSearchOpen, setIsSearchOpen] = useState<boolean>(false);
 
   useEffect(() => {
-    localStorage.removeItem("hyperdisk_scan_history");
     const savedMode = (localStorage.getItem("hyperdisk_theme_mode") as ThemeMode) || "dark";
     const savedFont = localStorage.getItem("hyperdisk_font");
     applyThemeMode(savedMode);
     if (savedFont) applyFont(savedFont);
   }, []);
 
-  const handleScanPath = useCallback(async (path: string) => {
-    try {
-      if (location.pathname !== "/analyzer") {
-        setScanOrigin(location.pathname);
+  // Synchronize Settings to Tauri Backend on Startup
+  useEffect(() => {
+    const initBackendSettings = async () => {
+      try {
+        const auto = localStorage.getItem("hyperdisk_auto_start") === "true";
+        const tray = localStorage.getItem("hyperdisk_system_tray") !== "false";
+        const disk = localStorage.getItem("hyperdisk_disk_monitor") !== "false";
+        const malware = localStorage.getItem("hyperdisk_malware_monitor") !== "false";
+
+        await invoke("apply_background_settings", {
+          settings: {
+            auto_start: auto,
+            system_tray: tray,
+            disk_monitor: disk,
+            malware_monitor: malware,
+          },
+        });
+      } catch (err) {
+        console.error("Failed to initialize background settings:", err);
       }
-      navigate("/analyzer");
-      let finalPath = path;
-      if (path.startsWith("~")) {
-        const home = await invoke<string>("get_home_folder");
-        finalPath = path.replace("~", home);
+    };
+    initBackendSettings();
+  }, []);
+
+  const handleScanPath = useCallback(
+    async (path: string) => {
+      try {
+        if (location.pathname !== "/analyzer") {
+          setScanOrigin(location.pathname);
+        }
+        navigate("/analyzer");
+        let finalPath = path;
+        if (path.startsWith("~")) {
+          const home = await invoke<string>("get_home_folder");
+          finalPath = path.replace("~", home);
+        }
+        await startScan(finalPath);
+        addScanPath(finalPath);
+      } catch (err: any) {
+        showToast({ message: "Scan Error", description: err?.message || String(err), type: "error" });
       }
-      await startScan(finalPath);
-    } catch (err: any) {
-      showToast({ message: "Scan Error", description: err?.message || String(err), type: "error" });
-    }
-  }, [navigate, startScan, location.pathname]);
+    },
+    [navigate, startScan, location.pathname, addScanPath],
+  );
 
   const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode) => {
     e.preventDefault();
@@ -142,11 +157,11 @@ export const App: React.FC = () => {
   const handleConfirmDelete = useCallback(async () => {
     if (!pendingDeleteNode) return;
     const node = pendingDeleteNode;
-    
+
     // Optimistically update UI state instantly
     setPendingDeleteNode(null);
     removeNode(node.id);
-    
+
     if (currentId === node.id) {
       navigateTo(node.parentId !== null ? node.parentId : 0);
     }
@@ -198,15 +213,18 @@ export const App: React.FC = () => {
     setIsSearchOpen(false);
   }, []);
 
-  const handleHoverNode = useCallback((node: FileNode | null) => {
-    if (hoverTimeoutRef.current !== null) {
-      cancelAnimationFrame(hoverTimeoutRef.current);
-    }
-    hoverTimeoutRef.current = requestAnimationFrame(() => {
-      setHoveredNode(node);
-      hoverTimeoutRef.current = null;
-    });
-  }, [setHoveredNode]);
+  const handleHoverNode = useCallback(
+    (node: FileNode | null) => {
+      if (hoverTimeoutRef.current !== null) {
+        cancelAnimationFrame(hoverTimeoutRef.current);
+      }
+      hoverTimeoutRef.current = requestAnimationFrame(() => {
+        setHoveredNode(node);
+        hoverTimeoutRef.current = null;
+      });
+    },
+    [setHoveredNode],
+  );
 
   // Clean up any pending animation frames on unmount
   useEffect(() => {
@@ -219,17 +237,23 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     const suppressContextMenu = (e: MouseEvent) => e.preventDefault();
-    window.addEventListener('contextmenu', suppressContextMenu);
-    return () => window.removeEventListener('contextmenu', suppressContextMenu);
+    window.addEventListener("contextmenu", suppressContextMenu);
+    return () => window.removeEventListener("contextmenu", suppressContextMenu);
   }, []);
 
-  const handleSelectNode = useCallback((node: FileNode | null) => {
-    setSelectedNode(node);
-  }, [setSelectedNode]);
+  const handleSelectNode = useCallback(
+    (node: FileNode | null) => {
+      setSelectedNode(node);
+    },
+    [setSelectedNode],
+  );
 
-  const handleNavigateTo = useCallback((id: number) => {
-    navigateTo(id);
-  }, [navigateTo]);
+  const handleNavigateTo = useCallback(
+    (id: number) => {
+      navigateTo(id);
+    },
+    [navigateTo],
+  );
 
   const handleCloseContextMenu = useCallback(() => {
     setContextMenu(null);
@@ -256,11 +280,14 @@ export const App: React.FC = () => {
     setCreateFolderTarget(null);
   }, []);
 
-  const handleFolderCreated = useCallback((newPath: string, folderName: string) => {
-    if (createFolderTarget) {
-      addFolderNode(createFolderTarget.id, newPath, folderName);
-    }
-  }, [createFolderTarget, addFolderNode]);
+  const handleFolderCreated = useCallback(
+    (newPath: string, folderName: string) => {
+      if (createFolderTarget) {
+        addFolderNode(createFolderTarget.id, newPath, folderName);
+      }
+    },
+    [createFolderTarget, addFolderNode],
+  );
 
   const hasScanData = flatNodes.length > 0;
 
@@ -270,8 +297,7 @@ export const App: React.FC = () => {
     return (
       <div className='fixed inset-0 z-50 flex items-center justify-center bg-background select-none font-sans p-6 overflow-y-auto'>
         <div className='w-full max-w-2xl bg-surface border border-surface-border rounded-3xl shadow-2xl p-8 sm:p-12 text-center space-y-8 animate-in zoom-in-95 duration-200 relative bg-glow max-h-[90vh] overflow-y-auto'>
-          
-          <div className="absolute inset-0 bg-gradient-to-tr from-accent-purple/5 to-accent-blue/5 rounded-3xl pointer-events-none" />
+          <div className='absolute inset-0 bg-gradient-to-tr from-accent-purple/5 to-accent-blue/5 rounded-3xl pointer-events-none' />
 
           <div className='flex flex-col items-center gap-4 relative z-10'>
             <div className='w-16 h-16 rounded-2xl bg-accent-purple/10 border border-accent-purple/20 text-accent-purple flex items-center justify-center shadow-lg shadow-accent-purple/5'>
@@ -288,25 +314,39 @@ export const App: React.FC = () => {
           <div className='grid grid-cols-1 sm:grid-cols-3 gap-4 text-left relative z-10'>
             <div className='p-4 bg-background/50 border border-surface-border rounded-2xl space-y-2'>
               <div className='text-xs font-bold text-slate-200 uppercase tracking-wider'>⚡ 5x Faster Scans</div>
-              <p className='text-[10px] text-slate-400 leading-relaxed'>Calculates folder structures and duplicate files in seconds without getting blocked by OS limits.</p>
+              <p className='text-[10px] text-slate-400 leading-relaxed'>
+                Calculates folder structures and duplicate files in seconds without getting blocked by OS limits.
+              </p>
             </div>
             <div className='p-4 bg-background/50 border border-surface-border rounded-2xl space-y-2'>
               <div className='text-xs font-bold text-slate-200 uppercase tracking-wider'>🛡️ Zero Popups</div>
-              <p className='text-[10px] text-slate-400 leading-relaxed'>Bypasses continuous system permission alerts for standard folders like Desktop, Downloads, and Documents.</p>
+              <p className='text-[10px] text-slate-400 leading-relaxed'>
+                Bypasses continuous system permission alerts for standard folders like Desktop, Downloads, and Documents.
+              </p>
             </div>
             <div className='p-4 bg-background/50 border border-surface-border rounded-2xl space-y-2'>
               <div className='text-xs font-bold text-slate-200 uppercase tracking-wider'>📂 Complete Analysis</div>
-              <p className='text-[10px] text-slate-400 leading-relaxed'>Scans deep system areas, caches, caches directories, and duplicate space logs accurately.</p>
+              <p className='text-[10px] text-slate-400 leading-relaxed'>
+                Scans deep system areas, caches, caches directories, and duplicate space logs accurately.
+              </p>
             </div>
           </div>
 
           <div className='p-5 bg-background/60 border border-surface-border rounded-2xl text-left text-xs text-slate-350 space-y-3 relative z-10 font-sans leading-relaxed'>
             <p className='font-bold text-slate-200'>How to enable permission:</p>
             <ol className='list-decimal list-inside space-y-2 text-[11px] opacity-90'>
-              <li>Click the <strong className='text-accent-purple'>Open Privacy & Security Settings</strong> button below.</li>
-              <li>In the System Settings window, locate <strong className='text-slate-200'>HyperDisk</strong>.</li>
-              <li>Toggle the switch next to HyperDisk to <strong className='text-emerald-400'>ON</strong>.</li>
-              <li>Once enabled, click <strong className='text-slate-200'>Check Status</strong> to start using the app.</li>
+              <li>
+                Click the <strong className='text-accent-purple'>Open Privacy & Security Settings</strong> button below.
+              </li>
+              <li>
+                In the System Settings window, locate <strong className='text-slate-200'>HyperDisk</strong>.
+              </li>
+              <li>
+                Toggle the switch next to HyperDisk to <strong className='text-emerald-400'>ON</strong>.
+              </li>
+              <li>
+                Once enabled, click <strong className='text-slate-200'>Check Status</strong> to start using the app.
+              </li>
             </ol>
           </div>
 
@@ -330,13 +370,13 @@ export const App: React.FC = () => {
                   showToast({
                     message: "Access Granted",
                     description: "Full Disk Access enabled successfully!",
-                    type: "success"
+                    type: "success",
                   });
                 } else {
                   showToast({
                     message: "Access Denied",
                     description: "Please make sure to toggle HyperDisk ON in macOS System Settings.",
-                    type: "warning"
+                    type: "warning",
                   });
                 }
               }}
@@ -500,9 +540,7 @@ export const App: React.FC = () => {
         onRetry={() => updater.startUpdate()}
       />
 
-
-
       <ToastProvider />
     </div>
   );
-};
+};;

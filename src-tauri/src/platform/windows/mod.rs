@@ -95,3 +95,39 @@ pub fn get_system_root_folders() -> Vec<UserFolder> {
 
     crate::services::disk::collect_user_folders(folders)
 }
+
+pub fn toggle_autostart(app_name: &str, enabled: bool) -> Result<(), String> {
+    let exe_path = std::env::current_exe()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .into_owned();
+
+    if enabled {
+        std::process::Command::new("reg")
+            .args(&[
+                "add",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                "/v",
+                app_name,
+                "/t",
+                "REG_SZ",
+                "/d",
+                &format!("\"{}\"", exe_path),
+                "/f",
+            ])
+            .output()
+            .map_err(|e| e.to_string())?;
+    } else {
+        std::process::Command::new("reg")
+            .args(&[
+                "delete",
+                "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run",
+                "/v",
+                app_name,
+                "/f",
+            ])
+            .output()
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}

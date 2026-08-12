@@ -464,7 +464,11 @@ pub fn get_dir_size_parallel(path: &Path) -> u64 {
                     {
                         use std::os::unix::fs::MetadataExt;
                         let physical = meta.blocks().saturating_mul(512);
-                        size += std::cmp::min(meta.len(), physical);
+                        if physical > 0 {
+                            size += std::cmp::min(meta.len(), physical);
+                        } else {
+                            size += meta.len();
+                        }
                     }
                     #[cfg(not(unix))]
                     {

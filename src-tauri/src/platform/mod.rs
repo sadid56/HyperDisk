@@ -48,3 +48,7 @@ pub fn is_tcc_protected_folder(path: &str) -> bool {
 pub fn should_skip_size_check(path: &str) -> bool {
     os::should_skip_size_check(path)
 }
+
+pub fn toggle_autostart(app_name: &str, enabled: bool) -> Result<(), String> {
+    os::toggle_autostart(app_name, enabled)
+}

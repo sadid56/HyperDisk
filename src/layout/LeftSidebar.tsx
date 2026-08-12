@@ -4,6 +4,7 @@ import { LayoutGrid, PieChart, HardDrive, Folder, FileText, Copy, Sparkles, Sett
 import { openUrl } from "@tauri-apps/plugin-opener";
 import { Button } from "../components/ui/Button";
 import LogoIcon from "../assets/icon.svg";
+import SidebarBg from "../assets/sidebar_bg.jpg";
 
 interface LeftSidebarProps {
   onDashboard: () => void;
@@ -29,8 +30,14 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ onDashboard }) => {
   ];
 
   return (
-    <aside className='w-64 border-r border-surface-border bg-slate-950/20 backdrop-blur-md flex flex-col justify-between p-4 shrink-0 select-none'>
-      <div className='space-y-6'>
+    <aside className='w-64 border-r border-surface-border bg-slate-950/25 backdrop-blur-md flex flex-col justify-between p-4 shrink-0 select-none relative overflow-hidden'>
+      {/* Background Mountain Image from Mockup */}
+      <div 
+        className="absolute inset-0 w-full h-full bg-cover bg-bottom bg-no-repeat opacity-[0.25] pointer-events-none z-0" 
+        style={{ backgroundImage: `url(${SidebarBg})` }} 
+      />
+
+      <div className='space-y-6 relative z-10'>
         {/* Logo area */}
         <button
           onClick={() => {
@@ -70,7 +77,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({ onDashboard }) => {
         </nav>
       </div>
 
-      <div className='space-y-4'>
+      <div className='space-y-4 relative z-10'>
         {/* Bottom Navigation Menu */}
         <nav className='space-y-1.5'>
           {bottomSidebarItems.map((item) => {

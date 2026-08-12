@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { invoke } from "@tauri-apps/api/core";
 import { getVersion } from '@tauri-apps/api/app';
-import { Settings, Type, Palette, Check, Sun, Moon, Laptop, ShieldAlert, RotateCcw } from "lucide-react";
+import { Settings, Type, Palette, Check, Sun, Moon, Laptop, ShieldAlert, RotateCcw, BellRing } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { PageHeader } from "../components/common/PageHeader";
@@ -35,6 +36,84 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
   const { hasFDA, checkFDA, requestFDA } = useFullDiskAccess();
   const [fdaDismissed, setFdaDismissed] = useState<boolean>(false);
   const isMac = navigator.userAgent.toLowerCase().includes("mac");
+
+  // Background Tasks States
+  const [autoStart, setAutoStart] = useState<boolean>(false);
+  const [systemTray, setSystemTray] = useState<boolean>(true);
+  const [diskMonitor, setDiskMonitor] = useState<boolean>(true);
+  const [malwareMonitor, setMalwareMonitor] = useState<boolean>(true);
+
+  // Sync background settings to Tauri backend
+  const applySettings = useCallback(async (auto: boolean, tray: boolean, disk: boolean, malware: boolean) => {
+    try {
+      await invoke("apply_background_settings", {
+        settings: {
+          auto_start: auto,
+          system_tray: tray,
+          disk_monitor: disk,
+          malware_monitor: malware,
+        }
+      });
+    } catch (err) {
+      console.error("Failed to apply settings to backend:", err);
+    }
+  }, []);
+
+  const handleToggleAutoStart = useCallback(() => {
+    const val = !autoStart;
+    setAutoStart(val);
+    localStorage.setItem("hyperdisk_auto_start", String(val));
+    applySettings(val, systemTray, diskMonitor, malwareMonitor);
+    showToast({
+      message: val ? "Startup Enabled" : "Startup Disabled",
+      description: val 
+        ? "HyperDisk will now start automatically when you boot your system." 
+        : "HyperDisk will no longer start on boot.",
+      type: "success",
+    });
+  }, [autoStart, systemTray, diskMonitor, malwareMonitor, applySettings]);
+
+  const handleToggleSystemTray = useCallback(() => {
+    const val = !systemTray;
+    setSystemTray(val);
+    localStorage.setItem("hyperdisk_system_tray", String(val));
+    applySettings(autoStart, val, diskMonitor, malwareMonitor);
+    showToast({
+      message: val ? "Minimize to Tray Active" : "Minimize to Tray Inactive",
+      description: val 
+        ? "Closing the app will now keep it running in the background system tray." 
+        : "Closing the app will quit the application completely.",
+      type: "success",
+    });
+  }, [autoStart, systemTray, diskMonitor, malwareMonitor, applySettings]);
+
+  const handleToggleDiskMonitor = useCallback(() => {
+    const val = !diskMonitor;
+    setDiskMonitor(val);
+    localStorage.setItem("hyperdisk_disk_monitor", String(val));
+    applySettings(autoStart, systemTray, val, malwareMonitor);
+    showToast({
+      message: val ? "Storage Alerts Enabled" : "Storage Alerts Disabled",
+      description: val 
+        ? "You will receive system notifications when disk space drops below 10% or 5 GB." 
+        : "Disk space monitoring alerts are now disabled.",
+      type: "success",
+    });
+  }, [autoStart, systemTray, diskMonitor, malwareMonitor, applySettings]);
+
+  const handleToggleMalwareMonitor = useCallback(() => {
+    const val = !malwareMonitor;
+    setMalwareMonitor(val);
+    localStorage.setItem("hyperdisk_malware_monitor", String(val));
+    applySettings(autoStart, systemTray, diskMonitor, val);
+    showToast({
+      message: val ? "Security Watcher Enabled" : "Security Watcher Disabled",
+      description: val 
+        ? "HyperDisk will notify you if suspicious files are downloaded." 
+        : "Download file security monitoring is now disabled.",
+      type: "success",
+    });
+  }, [autoStart, systemTray, diskMonitor, malwareMonitor, applySettings]);
 
   useEffect(() => {
     setFdaDismissed(localStorage.getItem("hyperdisk_fda_dismissed") === "true");
@@ -90,6 +169,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
 
     setThemeMode(savedMode);
     applyThemeMode(savedMode);
+
+    setAutoStart(localStorage.getItem("hyperdisk_auto_start") === "true");
+    setSystemTray(localStorage.getItem("hyperdisk_system_tray") !== "false");
+    setDiskMonitor(localStorage.getItem("hyperdisk_disk_monitor") !== "false");
+    setMalwareMonitor(localStorage.getItem("hyperdisk_malware_monitor") !== "false");
 
     fetchSystemFonts();
   }, []);
@@ -286,6 +370,105 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
             </div>
           </Card>
         )}
+
+        <Card className='space-y-4'>
+          <div className='flex items-center justify-between'>
+            <div className='flex items-center gap-2.5'>
+              <BellRing className='w-5 h-5 text-indigo-400' />
+              <h2 className='text-sm font-bold'>Background Services & Alerts</h2>
+            </div>
+          </div>
+
+          <div className='divide-y divide-surface-border/40 pt-2'>
+            {/* Toggle 1: Auto Start */}
+            <div className='flex items-center justify-between py-4 gap-4'>
+              <div className='space-y-1'>
+                <h3 className='font-bold text-xs text-text-primary'>Run on System Startup</h3>
+                <p className='text-[10px] text-text-muted leading-relaxed'>
+                  Automatically launch HyperDisk in the background when you turn on your system.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleAutoStart}
+                className={`relative inline-flex h-5.5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  autoStart ? "bg-indigo-500" : "bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    autoStart ? "translate-x-4.5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Toggle 2: Minimize to Tray */}
+            <div className='flex items-center justify-between py-4 gap-4'>
+              <div className='space-y-1'>
+                <h3 className='font-bold text-xs text-text-primary'>Keep Running in System Tray</h3>
+                <p className='text-[10px] text-text-muted leading-relaxed'>
+                  Minimize HyperDisk to your system tray icon when closing the window so background checks remain active.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleSystemTray}
+                className={`relative inline-flex h-5.5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  systemTray ? "bg-indigo-500" : "bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    systemTray ? "translate-x-4.5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Toggle 3: Low Disk space Alert */}
+            <div className='flex items-center justify-between py-4 gap-4'>
+              <div className='space-y-1'>
+                <h3 className='font-bold text-xs text-text-primary'>Low Disk Space Alerts</h3>
+                <p className='text-[10px] text-text-muted leading-relaxed'>
+                  Monitor primary disk storage and send a desktop alert if free space falls below 10% or 5 GB.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleDiskMonitor}
+                className={`relative inline-flex h-5.5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  diskMonitor ? "bg-indigo-500" : "bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    diskMonitor ? "translate-x-4.5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+
+            {/* Toggle 4: Malware watcher */}
+            <div className='flex items-center justify-between py-4 gap-4'>
+              <div className='space-y-1'>
+                <h3 className='font-bold text-xs text-text-primary'>Download Threat Monitor</h3>
+                <p className='text-[10px] text-text-muted leading-relaxed'>
+                  Scan downloads for suspicious extension patterns (e.g. invoice.pdf.exe) and spoofed system filenames.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleMalwareMonitor}
+                className={`relative inline-flex h-5.5 w-10 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                  malwareMonitor ? "bg-indigo-500" : "bg-slate-700"
+                }`}
+              >
+                <span
+                  className={`pointer-events-none inline-block h-4.5 w-4.5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                    malwareMonitor ? "translate-x-4.5" : "translate-x-0"
+                  }`}
+                />
+              </button>
+            </div>
+          </div>
+        </Card>
 
         <Card className='space-y-4'>
           <div className='flex items-center justify-between'>

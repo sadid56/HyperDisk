@@ -82,20 +82,14 @@ pub async fn scan_directory_shallow(
                         }
                     }
 
-                    let name = entry.file_name();
-                    let name_str = name.to_string_lossy();
-                    if !name_str.starts_with('.') {
-                        if is_dir {
-                            dir_entries.push((entry, is_symlink));
-                        } else if is_file {
-                            file_entries.push((entry, is_symlink));
-                        }
+                    if is_dir {
+                        dir_entries.push((entry, is_symlink));
+                    } else if is_file {
+                        file_entries.push((entry, is_symlink));
                     }
                 }
             }
         }
-
-        let has_fda = crate::services::disk::has_full_disk_access();
 
         // Process child subdirectories in parallel using Rayon
         let dirs: Vec<(String, PathBuf, u64, bool)> = dir_entries
@@ -105,10 +99,8 @@ pub async fn scan_directory_shallow(
                 let name = entry.file_name().to_string_lossy().into_owned();
                 let size = if is_sym {
                     0
-                } else if has_fda {
-                    crate::services::get_dir_size_parallel(&entry_path)
                 } else {
-                    0
+                    crate::services::get_dir_size_parallel(&entry_path)
                 };
                 (name, entry_path, size, is_sym)
             })
@@ -126,7 +118,11 @@ pub async fn scan_directory_shallow(
                     let s = meta.as_ref().map(|m| {
                         use std::os::unix::fs::MetadataExt;
                         let physical = m.blocks().saturating_mul(512);
-                        std::cmp::min(m.len(), physical)
+                        if physical > 0 {
+                            std::cmp::min(m.len(), physical)
+                        } else {
+                            m.len()
+                        }
                     }).unwrap_or(0);
                     #[cfg(not(unix))]
                     let s = meta.as_ref().map(|m| m.len()).unwrap_or(0);

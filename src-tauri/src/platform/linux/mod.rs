@@ -295,3 +295,40 @@ pub fn get_system_root_folders() -> Vec<UserFolder> {
 
     crate::services::disk::collect_user_folders(folders)
 }
+
+pub fn toggle_autostart(app_name: &str, enabled: bool) -> Result<(), String> {
+    if let Some(home) = dirs::home_dir() {
+        let autostart_dir = home.join(".config/autostart");
+        let desktop_path = autostart_dir.join(format!("{}.desktop", app_name.to_lowercase()));
+
+        if enabled {
+            if !autostart_dir.exists() {
+                std::fs::create_dir_all(&autostart_dir).map_err(|e| e.to_string())?;
+            }
+            let exe_path = std::env::current_exe()
+                .map_err(|e| e.to_string())?
+                .to_string_lossy()
+                .into_owned();
+
+            let desktop_content = format!(
+                r#"[Desktop Entry]
+Type=Application
+Version=1.0
+Name={}
+Comment={} startup launcher
+Exec={}
+Icon={}
+Terminal=false
+StartupNotify=false"#,
+                app_name,
+                app_name,
+                exe_path,
+                app_name.to_lowercase()
+            );
+            std::fs::write(&desktop_path, desktop_content).map_err(|e| e.to_string())?;
+        } else if desktop_path.exists() {
+            std::fs::remove_file(desktop_path).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}

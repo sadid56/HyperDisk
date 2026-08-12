@@ -14,7 +14,11 @@ fn get_file_physical_size(meta: &fs::Metadata) -> u64 {
     #[cfg(unix)]
     {
         let physical = meta.blocks().saturating_mul(512);
-        std::cmp::min(meta.len(), physical)
+        if physical > 0 {
+            std::cmp::min(meta.len(), physical)
+        } else {
+            meta.len()
+        }
     }
     #[cfg(not(unix))]
     {

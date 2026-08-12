@@ -71,9 +71,9 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
   updater,
   drives,
   folders,
-  systemRootFolders,
+  systemRootFolders: _systemRootFolders,
   drivesLoading,
-  foldersLoading,
+  foldersLoading: _foldersLoading,
   largeFiles,
   cleanupSuggestions,
   duplicateGroups,
@@ -92,15 +92,10 @@ export const AppRoutes: React.FC<AppRoutesProps> = ({
         element={
             <DashboardPage
               drives={drives}
-              folders={folders}
-              systemRootFolders={systemRootFolders}
-              largeFiles={largeFiles}
-              cleanupSuggestions={cleanupSuggestions}
               drivesLoading={drivesLoading}
-              foldersLoading={foldersLoading}
-              largeFilesLoading={largeFilesLoading}
-              cleanupLoading={cleanupLoading}
+              folders={folders}
               onScanPath={onScanPath}
+              onSelectFolder={onSelectFolder}
               onNavigateTab={(tab) => navigate(`/${tab === "overview" ? "" : tab}`)}
             />
         }
