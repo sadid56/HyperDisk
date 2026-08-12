@@ -326,10 +326,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
                   <div>
                     <h4 className='font-bold text-xs text-text-primary'>
                       {updater.readyToRestart
-                        ? `Update v${updater.updateInfo.version} Ready`
+                        ? `Update ${updater.updateInfo.version} Ready`
                         : updater.error
                           ? "Update Failed"
-                          : `New Release Available (v${updater.updateInfo.version})`}
+                          : `New Release Available (${updater.updateInfo.version})`}
                     </h4>
                     <p className='text-[9px] text-text-muted mt-0.5'>
                       {updater.readyToRestart
@@ -359,14 +359,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
                     variant='primary'
                     fullWidth
                     onClick={updater.performRestart}
+                    leftIcon={<RotateCcw className='w-3 h-3' />}
                     className='text-xs bg-emerald-600 hover:bg-emerald-700 border-emerald-500/50'
                   >
-                    <RotateCcw className='w-3 h-3 mr-1.5' />
                     Restart Now
                   </Button>
                 ) : updater.error ? (
-                  <Button variant='primary' fullWidth onClick={updater.startUpdate} className='text-xs'>
-                    <RotateCcw className='w-3 h-3 mr-1.5' />
+                  <Button variant='primary' fullWidth onClick={updater.startUpdate} leftIcon={<RotateCcw className='w-3 h-3' />} className='text-xs'>
                     Try Again
                   </Button>
                 ) : updater.installing ? (
@@ -384,7 +383,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = React.memo(({ updater }
                   </div>
                 ) : (
                   <Button variant='primary' fullWidth onClick={updater.startUpdate} className='text-xs'>
-                    Update to {updater.updateInfo.version} Now
+                    Update Now
                   </Button>
                 )}
               </div>

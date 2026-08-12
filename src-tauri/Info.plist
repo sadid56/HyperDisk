@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSDesktopFolderUsageDescription</key>
+	<string>HyperDisk needs access to analyze disk usage in your Desktop folder.</string>
+	<key>NSDocumentsFolderUsageDescription</key>
+	<string>HyperDisk needs access to analyze disk usage in your Documents folder.</string>
+	<key>NSDownloadsFolderUsageDescription</key>
+	<string>HyperDisk needs access to analyze disk usage in your Downloads folder.</string>
+	<key>NSRemovableVolumesUsageDescription</key>
+	<string>HyperDisk needs access to analyze disk usage on removable volumes.</string>
+</dict>
+</plist>
