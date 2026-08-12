@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod models;
 pub mod services;
+pub mod platform;
 
 pub use models::FileNode;
 pub use services::ScanCache;

@@ -12,15 +12,5 @@ pub fn check_full_disk_access() -> bool {
 
 #[tauri::command]
 pub fn request_full_disk_access(app: tauri::AppHandle) -> Result<(), String> {
-    #[cfg(target_os = "macos")]
-    {
-        use tauri_plugin_opener::OpenerExt;
-        let url = "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles";
-        app.opener().open_url(url, None::<String>).map_err(|e| e.to_string())
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = app;
-        Ok(())
-    }
+    crate::platform::request_full_disk_access(&app)
 }

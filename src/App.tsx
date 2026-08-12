@@ -21,6 +21,7 @@ import { useFullDiskAccess } from "./hooks/useFullDiskAccess";
 import { LeftSidebar } from "./layout/LeftSidebar";
 import { AlertTriangle, ShieldAlert } from "lucide-react";
 import { Header } from "./layout/Header";
+import { Button } from "./components/ui/Button";
 
 export const App: React.FC = () => {
   const updater = useAutoUpdater();
@@ -70,35 +71,20 @@ export const App: React.FC = () => {
     duplicatesLoading,
     refetchTools,
   } = useToolsData();
-  const { checkFDA, requestFDA } = useFullDiskAccess();
-  const [showFdaModal, setShowFdaModal] = useState<boolean>(false);
+  const { checkFDA, requestFDA, hasFDA } = useFullDiskAccess();
+  const [fdaSetupSkipped, setFdaSetupSkipped] = useState<boolean>(() => {
+    return localStorage.getItem("hyperdisk_fda_dismissed") === "true";
+  });
 
   useEffect(() => {
     const isMac = navigator.userAgent.toLowerCase().includes("mac");
     if (!isMac) return;
 
     const checkStartupFDA = async () => {
-      const fdaGranted = await checkFDA();
-      if (!fdaGranted) {
-        const dismissed = localStorage.getItem("hyperdisk_fda_dismissed") === "true";
-        if (!dismissed) {
-          setShowFdaModal(true);
-        }
-      }
+      await checkFDA();
     };
     checkStartupFDA();
   }, [checkFDA]);
-
-  const handleGrantFDA = useCallback(async () => {
-    await requestFDA();
-    localStorage.setItem("hyperdisk_fda_dismissed", "true");
-    setShowFdaModal(false);
-  }, [requestFDA]);
-
-  const handleSkipFDA = useCallback(() => {
-    localStorage.setItem("hyperdisk_fda_dismissed", "true");
-    setShowFdaModal(false);
-  }, []);
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; node: FileNode } | null>(null);
   const [pendingDeleteNode, setPendingDeleteNode] = useState<FileNode | null>(null);
@@ -231,6 +217,12 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    const suppressContextMenu = (e: MouseEvent) => e.preventDefault();
+    window.addEventListener('contextmenu', suppressContextMenu);
+    return () => window.removeEventListener('contextmenu', suppressContextMenu);
+  }, []);
+
   const handleSelectNode = useCallback((node: FileNode | null) => {
     setSelectedNode(node);
   }, [setSelectedNode]);
@@ -272,11 +264,99 @@ export const App: React.FC = () => {
 
   const hasScanData = flatNodes.length > 0;
 
-  useEffect(() => {
-    const suppressContextMenu = (e: MouseEvent) => e.preventDefault();
-    window.addEventListener('contextmenu', suppressContextMenu);
-    return () => window.removeEventListener('contextmenu', suppressContextMenu);
-  }, []);
+  const isMac = navigator.userAgent.toLowerCase().includes("mac");
+
+  if (isMac && !hasFDA && !fdaSetupSkipped) {
+    return (
+      <div className='fixed inset-0 z-50 flex items-center justify-center bg-background select-none font-sans p-6 overflow-y-auto'>
+        <div className='w-full max-w-2xl bg-surface border border-surface-border rounded-3xl shadow-2xl p-8 sm:p-12 text-center space-y-8 animate-in zoom-in-95 duration-200 relative bg-glow max-h-[90vh] overflow-y-auto'>
+          
+          <div className="absolute inset-0 bg-gradient-to-tr from-accent-purple/5 to-accent-blue/5 rounded-3xl pointer-events-none" />
+
+          <div className='flex flex-col items-center gap-4 relative z-10'>
+            <div className='w-16 h-16 rounded-2xl bg-accent-purple/10 border border-accent-purple/20 text-accent-purple flex items-center justify-center shadow-lg shadow-accent-purple/5'>
+              <ShieldAlert className='w-8 h-8 animate-pulse' />
+            </div>
+            <div className='space-y-2'>
+              <h1 className='text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-100'>Full Disk Access Required</h1>
+              <p className='text-xs sm:text-sm text-slate-400 max-w-md mx-auto leading-relaxed'>
+                HyperDisk requires permission to scan your storage drives and compute folder sizes at maximum performance.
+              </p>
+            </div>
+          </div>
+
+          <div className='grid grid-cols-1 sm:grid-cols-3 gap-4 text-left relative z-10'>
+            <div className='p-4 bg-background/50 border border-surface-border rounded-2xl space-y-2'>
+              <div className='text-xs font-bold text-slate-200 uppercase tracking-wider'>⚡ 5x Faster Scans</div>
+              <p className='text-[10px] text-slate-400 leading-relaxed'>Calculates folder structures and duplicate files in seconds without getting blocked by OS limits.</p>
+            </div>
+            <div className='p-4 bg-background/50 border border-surface-border rounded-2xl space-y-2'>
+              <div className='text-xs font-bold text-slate-200 uppercase tracking-wider'>🛡️ Zero Popups</div>
+              <p className='text-[10px] text-slate-400 leading-relaxed'>Bypasses continuous system permission alerts for standard folders like Desktop, Downloads, and Documents.</p>
+            </div>
+            <div className='p-4 bg-background/50 border border-surface-border rounded-2xl space-y-2'>
+              <div className='text-xs font-bold text-slate-200 uppercase tracking-wider'>📂 Complete Analysis</div>
+              <p className='text-[10px] text-slate-400 leading-relaxed'>Scans deep system areas, caches, caches directories, and duplicate space logs accurately.</p>
+            </div>
+          </div>
+
+          <div className='p-5 bg-background/60 border border-surface-border rounded-2xl text-left text-xs text-slate-350 space-y-3 relative z-10 font-sans leading-relaxed'>
+            <p className='font-bold text-slate-200'>How to enable permission:</p>
+            <ol className='list-decimal list-inside space-y-2 text-[11px] opacity-90'>
+              <li>Click the <strong className='text-accent-purple'>Open Privacy & Security Settings</strong> button below.</li>
+              <li>In the System Settings window, locate <strong className='text-slate-200'>HyperDisk</strong>.</li>
+              <li>Toggle the switch next to HyperDisk to <strong className='text-emerald-400'>ON</strong>.</li>
+              <li>Once enabled, click <strong className='text-slate-200'>Check Status</strong> to start using the app.</li>
+            </ol>
+          </div>
+
+          <div className='flex flex-col sm:flex-row items-center justify-center gap-3 relative z-10 pt-2'>
+            <Button
+              variant='secondary'
+              onClick={() => {
+                localStorage.setItem("hyperdisk_fda_dismissed", "true");
+                setFdaSetupSkipped(true);
+              }}
+              className='w-full sm:w-auto text-xs py-2.5 order-last sm:order-first'
+            >
+              Limited Mode (Skip)
+            </Button>
+
+            <Button
+              variant='outline'
+              onClick={async () => {
+                const granted = await checkFDA();
+                if (granted) {
+                  showToast({
+                    message: "Access Granted",
+                    description: "Full Disk Access enabled successfully!",
+                    type: "success"
+                  });
+                } else {
+                  showToast({
+                    message: "Access Denied",
+                    description: "Please make sure to toggle HyperDisk ON in macOS System Settings.",
+                    type: "warning"
+                  });
+                }
+              }}
+              className='w-full sm:w-auto text-xs py-2.5'
+            >
+              Check Status
+            </Button>
+
+            <Button
+              variant='primary'
+              onClick={requestFDA}
+              className='w-full sm:w-auto text-xs py-2.5 bg-accent-purple hover:bg-accent-purple/90 border-none'
+            >
+              Open Privacy & Security Settings
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className='h-screen w-screen flex bg-background text-slate-100 overflow-hidden font-sans select-none'>
@@ -420,32 +500,7 @@ export const App: React.FC = () => {
         onRetry={() => updater.startUpdate()}
       />
 
-      {showFdaModal && (
-        <AlertModal
-          isOpen={showFdaModal}
-          title="Full Disk Access Recommended"
-          subtitle="macOS Security & Privacy"
-          icon={<ShieldAlert className='w-5 h-5 text-amber-500' />}
-          variant='warning'
-          confirmLabel='Grant Access'
-          cancelLabel='Skip'
-          onConfirm={handleGrantFDA}
-          onCancel={handleSkipFDA}
-          message={
-            <div className='space-y-3 text-xs text-slate-350 leading-relaxed text-left'>
-              <p>
-                HyperDisk needs <strong>Full Disk Access</strong> permission to scan your drives and analyze storage usage.
-              </p>
-              <p>
-                Without this permission, macOS will prompt you with multiple file access popups, and the application will run significantly slower (up to 5x slower) and cannot analyze system areas.
-              </p>
-              <p>
-                To grant access, click <strong>Grant Access</strong>, toggle HyperDisk to ON in macOS System Settings under Privacy & Security, and restart the app. You can configure this later in Settings.
-              </p>
-            </div>
-          }
-        />
-      )}
+
 
       <ToastProvider />
     </div>

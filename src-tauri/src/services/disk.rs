@@ -1,7 +1,6 @@
 use crate::models::{
     DirectoryEntry, DiskSpaceInfo, SystemDrive, UserFolder
 };
-use tauri::Manager;
 use rayon::prelude::*;
 #[cfg(target_os = "linux")]
 use std::collections::HashSet;
@@ -371,83 +370,18 @@ pub fn list_directory_entries(target_path: &str) -> Result<Vec<DirectoryEntry>, 
 }
 
 pub fn has_full_disk_access() -> bool {
-    #[cfg(target_os = "macos")]
-    {
-        // Check TCC.db instead of user data folders (like Mail) to prevent OS prompts.
-        let path = std::path::Path::new("/Library/Application Support/com.apple.TCC/TCC.db");
-        match std::fs::metadata(path) {
-            Ok(_) => true,
-            Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
-        }
-    }
-    #[cfg(not(target_os = "macos"))]
-    {
-        true
-    }
+    crate::platform::has_full_disk_access()
 }
 
 pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
-    let mut standard_paths = Vec::new();
+    crate::platform::get_user_folders(app)
+}
 
-    // Applications folder
-    #[cfg(target_os = "windows")]
-    {
-        standard_paths.push(("Applications".to_string(), PathBuf::from("C:\\Program Files")));
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        standard_paths.push(("Applications".to_string(), PathBuf::from("/Applications")));
-    }
+pub fn get_system_root_folders() -> Vec<UserFolder> {
+    crate::platform::get_system_root_folders()
+}
 
-    // On macOS without Full Disk Access, avoid using Tauri's app.path() API for
-    // standard user folders. Those calls go through NSFileManager which triggers
-    // individual TCC (Transparency, Consent, and Control) permission popups for
-    // each protected folder (Documents, Downloads, Desktop, etc.).
-    // Instead, construct paths manually from $HOME to avoid the prompt barrage.
-    #[cfg(target_os = "macos")]
-    {
-        let has_fda = has_full_disk_access();
-        if has_fda {
-            // With FDA granted, Tauri's path API is safe — no popups will appear
-            if let Ok(p) = app.path().document_dir() { standard_paths.push(("Documents".to_string(), p)); }
-            if let Ok(p) = app.path().download_dir() { standard_paths.push(("Downloads".to_string(), p)); }
-            if let Ok(p) = app.path().desktop_dir() { standard_paths.push(("Desktop".to_string(), p)); }
-            if let Ok(p) = app.path().picture_dir() { standard_paths.push(("Pictures".to_string(), p)); }
-            if let Ok(p) = app.path().video_dir()   { standard_paths.push(("Movies".to_string(), p)); }
-            if let Ok(p) = app.path().audio_dir()   { standard_paths.push(("Music".to_string(), p)); }
-        } else {
-            // Without FDA, construct paths from $HOME to avoid TCC prompts
-            if let Ok(home) = std::env::var("HOME") {
-                let home = PathBuf::from(home);
-                for (label, dir_name) in &[
-                    ("Documents", "Documents"),
-                    ("Downloads", "Downloads"),
-                    ("Desktop", "Desktop"),
-                    ("Pictures", "Pictures"),
-                    ("Movies", "Movies"),
-                    ("Music", "Music"),
-                ] {
-                    let p = home.join(dir_name);
-                    if p.exists() && p.is_dir() {
-                        standard_paths.push((label.to_string(), p));
-                    }
-                }
-            }
-        }
-    }
-
-    // On non-macOS platforms, always use Tauri's path API (no TCC restrictions)
-    #[cfg(not(target_os = "macos"))]
-    {
-        let _ = &app; // suppress unused warning handled by cfg
-        if let Ok(p) = app.path().document_dir() { standard_paths.push(("Documents".to_string(), p)); }
-        if let Ok(p) = app.path().download_dir() { standard_paths.push(("Downloads".to_string(), p)); }
-        if let Ok(p) = app.path().desktop_dir() { standard_paths.push(("Desktop".to_string(), p)); }
-        if let Ok(p) = app.path().picture_dir() { standard_paths.push(("Pictures".to_string(), p)); }
-        if let Ok(p) = app.path().video_dir()   { standard_paths.push(("Movies".to_string(), p)); }
-        if let Ok(p) = app.path().audio_dir()   { standard_paths.push(("Music".to_string(), p)); }
-    }
-
+pub fn assemble_user_folders(standard_paths: Vec<(String, PathBuf)>) -> Vec<UserFolder> {
     let mut all_paths = Vec::new();
     // Add standard ones that exist
     for (name, path) in standard_paths.clone() {
@@ -488,7 +422,11 @@ pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
         }
     }
 
-    let folders: Vec<UserFolder> = all_paths
+    collect_user_folders(all_paths)
+}
+
+pub fn collect_user_folders(all_paths: Vec<(String, PathBuf)>) -> Vec<UserFolder> {
+    all_paths
         .into_par_iter()
         .map(|(name, path_buf)| {
             UserFolder {
@@ -498,9 +436,7 @@ pub fn get_user_folders(app: &tauri::AppHandle) -> Vec<UserFolder> {
                 size: None,
             }
         })
-        .collect();
-
-    folders
+        .collect()
 }
 
 pub fn get_dir_size_parallel(path: &Path) -> u64 {
@@ -508,13 +444,8 @@ pub fn get_dir_size_parallel(path: &Path) -> u64 {
         return 0;
     }
 
-    #[cfg(target_os = "macos")]
-    {
-        let path_str = path.to_string_lossy();
-        // Avoid traversing APFS volume mount points that cause duplicate sizes
-        if path_str == "/System/Volumes" || path_str == "/Volumes" || path_str == "/dev" {
-            return 0;
-        }
+    if crate::platform::is_dir_size_parallel_excluded(&path.to_string_lossy()) {
+        return 0;
     }
 
     let mut size: u64 = 0;
@@ -550,118 +481,6 @@ pub fn get_dir_size_parallel(path: &Path) -> u64 {
 
 #[allow(unused_variables)]
 fn get_disk_smart_status(mount_point: &str) -> String {
-    #[cfg(target_os = "macos")]
-    {
-        if mount_point.is_empty() {
-            return "Unknown".to_string();
-        }
-        let output = std::process::Command::new("diskutil")
-            .args(["info", mount_point])
-            .output();
-
-        if let Ok(out) = output {
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            for line in stdout.lines() {
-                if line.contains("SMART Status:") {
-                    let parts: Vec<&str> = line.split(':').collect();
-                    if parts.len() > 1 {
-                        return parts[1].trim().to_string();
-                    }
-                }
-            }
-        }
-        "Unknown".to_string()
-    }
-    #[cfg(target_os = "windows")]
-    {
-        let output = std::process::Command::new("powershell")
-            .args(["-Command", "Get-WmiObject -Namespace root\\wmi -Class MSStorageDriver_FailurePredictStatus | Select-Object -ExpandProperty PredictFailure"])
-            .output();
-        if let Ok(out) = output {
-            let stdout = String::from_utf8_lossy(&out.stdout).trim().to_lowercase();
-            if stdout == "false" {
-                return "Verified".to_string();
-            } else if stdout == "true" {
-                return "Failing".to_string();
-            }
-        }
-        "Unknown".to_string()
-    }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
-    {
-        "Unknown".to_string()
-    }
-}
-
-pub fn get_system_root_folders() -> Vec<UserFolder> {
-    let root_path = if cfg!(target_os = "windows") {
-        PathBuf::from("C:\\")
-    } else {
-        PathBuf::from("/")
-    };
-
-    let mut folders = Vec::new();
-    if let Ok(entries) = fs::read_dir(&root_path) {
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(name_str) = path.file_name().and_then(|n| n.to_str()) {
-                    // Skip hidden directories (starting with '.')
-                    if name_str.starts_with('.') {
-                        continue;
-                    }
-                    
-                    // Skip system virtual/special folders on Unix
-                    #[cfg(not(target_os = "windows"))]
-                    {
-                        let name_lower = name_str.to_lowercase();
-                        if name_lower == "proc"
-                            || name_lower == "sys"
-                            || name_lower == "dev"
-                            || name_lower == "run"
-                            || name_lower == "tmp"
-                            || name_lower == "mnt"
-                            || name_lower == "media"
-                            || name_lower == "lost+found"
-                            || name_lower == "etc"
-                            || name_lower == "bin"
-                            || name_lower == "sbin"
-                            || name_lower == "boot"
-                            || name_lower == "lib"
-                            || name_lower == "lib64"
-                        {
-                            continue;
-                        }
-                    }
-
-                    // Skip system special folders on Windows
-                    #[cfg(target_os = "windows")]
-                    {
-                        let name_lower = name_str.to_lowercase();
-                        if name_lower.starts_with('$')
-                            || name_lower == "system volume information"
-                            || name_lower == "documents and settings"
-                        {
-                            continue;
-                        }
-                    }
-
-                    folders.push((name_str.to_string(), path));
-                }
-            }
-        }
-    }
-
-    folders
-        .into_par_iter()
-        .map(|(name, path_buf)| {
-            UserFolder {
-                name,
-                path: path_buf.to_string_lossy().to_string(),
-                exists: true,
-                size: None,
-            }
-        })
-        .collect()
+    crate::platform::get_disk_smart_status(mount_point)
 }
 
