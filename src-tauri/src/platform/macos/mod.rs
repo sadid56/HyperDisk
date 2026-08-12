@@ -61,22 +61,27 @@ pub fn is_dir_size_parallel_excluded(path_str: &str) -> bool {
 
 pub fn should_skip_size_check(path: &str) -> bool {
     let path_buf = PathBuf::from(path);
-    if let Ok(home) = std::env::var("HOME") {
-        let home_path = PathBuf::from(home);
+    if let Some(home_path) = dirs::home_dir() {
+        let path_buf = path_buf.canonicalize().unwrap_or(path_buf);
+        let home_path = home_path.canonicalize().unwrap_or(home_path);
         
         let media_or_library = ["Pictures", "Movies", "Music", "Library"];
         if media_or_library.iter().any(|subdir| {
             let p = home_path.join(subdir);
+            let p = p.canonicalize().unwrap_or(p);
             path_buf.starts_with(&p) || path_buf == p
         }) {
             return true;
         }
 
         // Standard user folders require FDA. Skip if FDA is not granted.
-        if !has_full_disk_access() {
+        // During development (debug_assertions), we also skip them to prevent recompiled binaries from triggering TCC prompts.
+        let skip_tcc = cfg!(debug_assertions) || !has_full_disk_access();
+        if skip_tcc {
             let tcc_dirs = ["Desktop", "Documents", "Downloads"];
             if tcc_dirs.iter().any(|subdir| {
                 let p = home_path.join(subdir);
+                let p = p.canonicalize().unwrap_or(p);
                 path_buf.starts_with(&p) || path_buf == p
             }) {
                 return true;

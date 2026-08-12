@@ -448,6 +448,12 @@ install_mac() {
         echo "Removing quarantine attributes..."
         xattr -cr "/Applications/HyperDisk.app"
     fi
+
+    # Re-sign the app locally to ensure macOS TCC/FDA respects permissions
+    if command -v codesign >/dev/null 2>&1; then
+        echo "Signing app locally for macOS security..."
+        codesign --force --deep --sign - "/Applications/HyperDisk.app" >/dev/null 2>&1 || true
+    fi
     
     echo "Detaching DMG..."
     hdiutil detach "$MOUNT_POINT" >/dev/null 2>&1
