@@ -5,7 +5,7 @@ use tauri::Manager;
 
 pub fn has_full_disk_access() -> bool {
     let path = Path::new("/Library/Application Support/com.apple.TCC/TCC.db");
-    match fs::metadata(path) {
+    match std::fs::File::open(path) {
         Ok(_) => true,
         Err(err) => err.kind() != std::io::ErrorKind::PermissionDenied,
     }
